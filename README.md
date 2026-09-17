@@ -1,156 +1,58 @@
-# SOC_REAL_PROJECT
-BRUTE FORCE DETECTION 
 # SOC Brute Force Detector
 
-A PowerShell-based Blue Team detection project that identifies **potential brute-force authentication activity** using Windows Security Event ID 4625.
+A Windows-based SOC detection project that identifies potential brute-force authentication activity using Windows Security Event ID 4625.
 
-The project demonstrates a small SOC detection workflow:
+## Project Overview
+
+This project simulates a small SOC detection workflow:
 
 **Collect → Parse → Correlate → Detect → Alert → Investigate → Document**
 
----
+The detector monitors Windows Security logs for repeated failed logon events and identifies bursts of authentication failures from the same source IP against the same target account.
 
-## 📌 Project Overview
+## Detection Objective
 
-Authentication failures are common in Windows environments. A single failed login does not necessarily indicate malicious activity.
+Detect potential brute-force authentication activity when:
 
-This project detects **repeated Event ID 4625 failures** by correlating:
+> **5 or more failed logon attempts occur within 5 minutes from the same source IP against the same target account.**
 
-* Source IP
-* Target account
-* Failure frequency
-* Time window
+Windows Security **Event ID 4625** represents a failed logon attempt.
+
+## Detection Logic
+
+The detector performs the following steps:
+
+1. Collect Event ID 4625 from the Windows Security log.
+2. Parse the event XML.
+3. Extract relevant authentication fields.
+4. Maintain a rolling time window.
+5. Correlate events using:
+
+   * Source IP
+   * Target account
+6. Count failures within the configured window.
+7. Generate an alert when the threshold is reached.
+8. Assign a severity based on the number of failures.
+9. Record investigation evidence.
 
 ### Detection Rule
 
 ```text
 IF
-
-Event ID = 4625
+    Event ID = 4625
 AND
-Same Source IP
+    Same Source IP
 AND
-Same Target Account
+    Same Target Account
 AND
-5 or more failures occur within 5 minutes
+    >= 5 failures
+    within 5 minutes
 
 THEN
-
-Generate a Potential Brute Force Alert
+    Generate potential brute-force alert
 ```
 
-The detector can analyze historical Windows events and monitor newly generated Event ID 4625 events in real time.
-
----
-
-## 🎯 Objectives
-
-The main objectives of this project are to:
-
-* Understand Windows Security Event ID 4625
-* Parse Windows Event XML
-* Build a time-based detection rule
-* Correlate authentication failures
-* Detect repeated failed logons
-* Assign alert severity
-* Monitor events in real time
-* Generate investigation evidence
-* Map the detection to MITRE ATT&CK
-* Practice SOC L1 detection and investigation workflows
-
----
-
-## 🛠️ Technologies Used
-
-* **PowerShell**
-* **Windows Security Event Log**
-* **Windows Event ID 4625**
-* **WMI Event Monitoring**
-* **XML Event Parsing**
-* **Rolling Time-Window Detection**
-* **Source IP + Target Account Correlation**
-* **MITRE ATT&CK**
-
----
-
-## 🔎 Windows Event ID 4625
-
-**Event ID 4625** is generated when a logon attempt fails.
-
-The detector extracts useful fields from the event XML, including:
-
-```text
-TimeCreated
-EventID
-RecordId
-TargetUserName
-LogonType
-Status
-SubStatus
-IpAddress
-ProcessName
-```
-
-These fields provide context for investigating authentication failures.
-
----
-
-# 🧠 Detection Logic
-
-The detector uses a **rolling 5-minute window**.
-
-For every new Event ID 4625:
-
-1. Retrieve the exact Windows event.
-2. Parse the event XML.
-3. Extract authentication fields.
-4. Add the event to the recent-event collection.
-5. Remove events outside the 5-minute window.
-6. Correlate events using Source IP + Target Account.
-7. Count matching failures.
-8. Compare the count against the threshold.
-9. Generate an alert if the threshold is reached.
-10. Create investigation evidence.
-
-### Detection Flow
-
-```text
-Windows Security Log
-        │
-        ▼
-Event ID 4625
-        │
-        ▼
-Parse Event XML
-        │
-        ▼
-Extract Source IP + Account
-        │
-        ▼
-5-Minute Rolling Window
-        │
-        ▼
-Correlate Matching Events
-        │
-        ▼
-Count Failed Logons
-        │
-        ├── < 5 ──► No Alert
-        │
-        └── ≥ 5 ──► Potential Brute Force Alert
-                         │
-                         ▼
-                    Severity
-                         │
-                         ▼
-                  Evidence Report
-```
-
----
-
-# 🚨 Severity Classification
-
-The detector uses the following lab thresholds:
+## Severity Logic
 
 | Failed Logons | Severity |
 | ------------: | -------- |
@@ -158,32 +60,78 @@ The detector uses the following lab thresholds:
 |         10–19 | High     |
 |           20+ | Critical |
 
-These values are configurable and are intended for this lab environment.
+These thresholds are configurable and are intended for this lab environment.
 
----
+## Technologies
 
-# 🧪 Testing
+* Windows Security Event Log
+* PowerShell
+* Windows Event ID 4625
+* WMI event monitoring
+* XML event parsing
+* Rolling time-window detection
+* Source IP + account correlation
 
-The detector was tested using controlled simulated events as well as real Windows Security Event ID 4625 events generated on the lab machine.
+## Project Components
 
-## Negative Test
+```text
+SOC-BruteForce/
+│
+├── BruteForceDetector.ps1
+├── TestBruteForce.ps1
+├── Evidence/
+└── README.md
+```
 
-The detector was tested with fewer failures than the configured threshold.
+## Detection Modes
+
+### Historical Detection
+
+The detector can analyze previously recorded Event ID 4625 events within a configurable lookback period.
+
+Example:
+
+```text
+Lookback: 168 hours
+Detection window: 5 minutes
+Threshold: 5 failures
+```
+
+### Real-Time Detection
+
+The live monitor watches the Windows Security log for newly created Event ID 4625 events.
+
+When a new event appears, it:
+
+1. Retrieves the exact Windows event.
+2. Parses the event.
+3. Adds it to the rolling window.
+4. Correlates it with previous failures.
+5. Calculates the current failure count.
+6. Generates an alert if the threshold is reached.
+
+## Testing
+
+The project was tested using controlled simulated authentication events.
+
+### Negative Test
+
+A small number of failures below the threshold did not generate an alert.
+
+Expected behavior:
 
 ```text
 4 failures
 within 5 minutes
         ↓
-No Alert
+No alert
 ```
 
-This confirms that the detector does not alert simply because Event ID 4625 exists.
+### Positive Test
 
----
+A controlled burst reaching the threshold generated a potential brute-force detection.
 
-## Positive Test
-
-The detector was tested with a controlled burst reaching the threshold.
+Expected behavior:
 
 ```text
 5 failures
@@ -191,14 +139,12 @@ within 5 minutes
         ↓
 Potential Brute Force Alert
         ↓
-Medium Severity
+Medium severity
 ```
 
----
+### Severity Testing
 
-## Severity Tests
-
-The severity logic was tested with different event counts:
+The detection logic was also tested with higher event counts:
 
 ```text
 5 failures  → Medium
@@ -206,13 +152,11 @@ The severity logic was tested with different event counts:
 20 failures → Critical
 ```
 
----
-
-# 🖥️ Real Windows Event Testing
+## Real Windows Events
 
 The detector was also tested against actual Windows Security Event ID 4625 events generated on the lab machine.
 
-Example observed context:
+The observed events included local authentication activity such as:
 
 ```text
 Event ID   : 4625
@@ -220,381 +164,201 @@ Source IP  : 127.0.0.1
 Logon Type : 2
 ```
 
-The real events demonstrated that the detector can collect and parse live Windows authentication failures.
+These events were used to validate real event collection and parsing.
 
-However:
+A single Event ID 4625 does **not** prove that a brute-force attack occurred.
 
-> **A single Event ID 4625 does not prove that a brute-force attack occurred.**
+The detector therefore requires repeated failures within a defined time window and correlates the source and target context before generating an alert.
 
-For example, authentication failures can result from:
+## Analyst Investigation Workflow
 
-* Incorrect passwords
-* User mistakes
-* Local applications
-* Misconfigured authentication
-* Administrative activity
+When an alert is generated, an analyst should investigate:
 
-Therefore, this project detects **potential** brute-force activity based on repeated failures and correlation.
+1. **Source**
 
----
+   * Is the source IP expected?
+   * Does it belong to the organization or lab system?
 
-# ⚡ Real-Time Monitoring
+2. **Target**
 
-The live monitor watches the Windows Security log for newly created Event ID 4625 events.
+   * Which account was targeted?
+   * Is the account legitimate?
 
-When a new event is detected, the monitor:
+3. **Frequency**
 
-```text
-New Event 4625
-      ↓
-Retrieve exact Record ID
-      ↓
-Parse event
-      ↓
-Update rolling window
-      ↓
-Correlate Source IP + Account
-      ↓
-Calculate failure count
-      ↓
-Check threshold
-```
+   * How many failures occurred?
+   * How quickly did they occur?
 
-Example live output:
+4. **Logon Context**
 
-```text
-NEW SECURITY EVENT 4625
+   * What Logon Type was used?
+   * What authentication package was involved?
 
-Time       : [event time]
-Record ID  : [event record ID]
-Source IP  : 127.0.0.1
-Account    : -
-Logon Type : 2
-Failures   : 1 / 5
-Window     : 5 minutes
-```
+5. **Related Events**
 
-When the configured threshold is reached, the detector can generate a potential brute-force alert and create an evidence report.
+   * Review surrounding Security events.
+   * Look for successful logons following the failures.
 
----
+6. **Assessment**
 
-# 📄 Evidence Collection
+   * Determine whether the activity is expected or suspicious.
 
-Detection evidence is stored under:
+7. **Documentation**
+
+   * Preserve the relevant events and investigation findings.
+
+## Evidence
+
+Detection evidence is stored in:
 
 ```text
 C:\SOC-BruteForce\Evidence
 ```
 
-Reports can contain:
+Evidence reports contain information such as:
 
-* Detection timestamp
+* Detection time
 * Source IP
 * Target account
-* Number of failed logons
+* Number of failures
 * Detection window
-* Event ID
-* Record ID
+* Event IDs
+* Record IDs
 * Logon Type
 * Status
 * SubStatus
 * Process
 * Observed events
-* Analyst investigation steps
+* Analyst investigation guidance
 * Assessment
 * Recommendation
 
-Example evidence structure:
+## False Positives
 
-```text
-Evidence/
-│
-├── BruteForce_Alert_*.txt
-├── BruteForce_NoAlert_*.txt
-└── LiveBruteForce_Alert_*.txt
-```
+Repeated 4625 events do not automatically mean malicious activity.
 
----
+Possible legitimate causes include:
 
-# 🔬 SOC Analyst Investigation Workflow
-
-A detection should not immediately be treated as a confirmed security incident.
-
-After an alert, an analyst should investigate:
-
-### 1. Source
-
-Determine whether the source IP is expected.
-
-```text
-Is the source authorized?
-Is it a known workstation/server?
-Is the activity coming from an expected network?
-```
-
-### 2. Target Account
-
-Identify the account being targeted.
-
-```text
-Is the account legitimate?
-Is it a privileged account?
-Is the account expected on this system?
-```
-
-### 3. Authentication Pattern
-
-Review:
-
-* Number of failures
-* Time between failures
-* Logon Type
-* Authentication package
-* Status/SubStatus
-
-### 4. Related Events
-
-Review surrounding Windows Security events.
-
-Particularly investigate whether successful authentication occurs after repeated failures.
-
-### 5. Determine Context
-
-Ask whether the activity could be explained by:
-
-* User error
-* Application behavior
+* Incorrect passwords
+* User authentication mistakes
+* Local applications attempting authentication
 * Administrative activity
-* Configuration problems
-* Unauthorized authentication attempts
+* Misconfigured services or applications
 
-### 6. Document Findings
+For this reason, the detector is intentionally described as detecting **potential** brute-force activity rather than proving an attack.
 
-Record:
+## Limitations
 
-```text
-What happened?
-When did it happen?
-Which account was involved?
-Where did it originate?
-How many failures occurred?
-Were there successful logons?
-Is the activity expected?
-What should happen next?
-```
+This project is a local SOC lab and has several limitations:
 
----
+* It currently focuses on Windows Event ID 4625.
+* It does not replace a production SIEM.
+* IP and account fields may be unavailable or represented differently depending on the authentication context.
+* Event ID 4625 alone cannot establish attacker intent.
+* Additional telemetry is required for stronger incident correlation.
 
-# 🗺️ MITRE ATT&CK Mapping
+## Future Improvements
 
-## T1110 — Brute Force
-
-**Tactic:** Credential Access
-
-**Technique:** T1110 — Brute Force
-
-This project is designed to detect repeated authentication failures that may be consistent with brute-force activity.
-
-### Detection Relationship
-
-| ATT&CK / Detection Element | Implementation              |
-| -------------------------- | --------------------------- |
-| Technique                  | T1110 — Brute Force         |
-| Tactic                     | Credential Access           |
-| Windows Event              | Event ID 4625               |
-| Detection Window           | 5 minutes                   |
-| Threshold                  | 5 failures                  |
-| Correlation                | Source IP + Target Account  |
-| Detection Output           | Potential brute-force alert |
-| Evidence                   | Investigation report        |
-
-### Mapping Logic
-
-```text
-Repeated Authentication Failures
-             │
-             ▼
-      Event ID 4625
-             │
-             ▼
- Same Source + Same Account
-             │
-             ▼
- 5+ Failures / 5 Minutes
-             │
-             ▼
- Potential T1110 Activity
-```
-
-### Important Limitation
-
-The ATT&CK mapping does **not** mean that every Event ID 4625 represents T1110.
-
-The mapping represents a detection hypothesis based on the observed authentication pattern.
-
-Additional telemetry and investigation are required to determine whether the activity is actually malicious.
-
----
-
-# ⚠️ False Positives
-
-Potential false positives include:
-
-* Users entering an incorrect password
-* Applications attempting authentication with invalid credentials
-* Misconfigured services
-* Administrative activity
-* Local authentication failures
-
-This is why the detector uses:
-
-**Time + Source + Account + Failure Count**
-
-rather than treating every 4625 event as malicious.
-
----
-
-# ⚠️ Limitations
-
-This project is a local SOC lab and is not intended to replace a production SIEM.
-
-Current limitations include:
-
-* Focuses primarily on Event ID 4625
-* Authentication fields vary depending on the logon context
-* Source IP may be local or unavailable
-* Target account information may sometimes be unavailable
-* Event ID 4625 alone cannot prove malicious intent
-* Additional telemetry is required for stronger correlation
-* Thresholds require tuning for different environments
-
----
-
-# 📁 Project Structure
-
-```text
-SOC-BruteForce/
-│
-├── BruteForceDetector.ps1
-├── TestBruteForce.ps1
-├── LiveBruteForceMonitor.ps1
-├── README.md
-│
-├── Evidence/
-│
-└── Screenshots/
-```
-
-### File Description
-
-| File                        | Purpose                                   |
-| --------------------------- | ----------------------------------------- |
-| `BruteForceDetector.ps1`    | Historical brute-force detection          |
-| `TestBruteForce.ps1`        | Controlled detection and severity testing |
-| `LiveBruteForceMonitor.ps1` | Real-time Event ID 4625 monitoring        |
-| `README.md`                 | Project documentation                     |
-| `Evidence/`                 | Detection and investigation reports       |
-| `Screenshots/`              | Project evidence for documentation        |
-
----
-
-# 🚀 Future Improvements
-
-Possible extensions for this project include:
+Possible future extensions include:
 
 * Sysmon correlation
 * Successful-logon correlation
 * Event ID 4648 correlation
 * Event ID 4672 correlation
 * Sigma detection rule
-* SIEM integration
-* KQL implementation
-* MITRE ATT&CK enrichment
-* Automated investigation
-* Python-based automation
-* Detection dashboard
-
----
-
-# 🎓 What I Learned
-
-Through this project, I practiced:
-
-* Windows Event Log analysis
-* Event XML parsing
-* PowerShell scripting
-* Detection engineering
-* Time-based correlation
-* Authentication investigation
-* Alert severity classification
-* False-positive analysis
-* Evidence collection
+* SIEM ingestion
 * MITRE ATT&CK mapping
-* Basic SOC analyst workflow
+* Automated investigation enrichment
+* Dashboard visualization
+* Python-based automation
 
-The key lesson was that **detecting an event is not the same as proving an attack**.
+## Project Goal
 
-A useful SOC detection needs context, correlation, investigation, and evidence.
+The goal of this project is not simply to collect Windows logs.
 
----
-
-# 🔄 SOC Detection Workflow
-
-This project follows a simplified SOC workflow:
+It demonstrates a basic SOC workflow:
 
 ```text
-COLLECT
-   ↓
-Windows Security Event 4625
-   ↓
-PARSE
-   ↓
-Extract authentication fields
-   ↓
-CORRELATE
-   ↓
-Source IP + Target Account
-   ↓
-DETECT
-   ↓
-5+ failures within 5 minutes
-   ↓
-ALERT
-   ↓
-Severity classification
-   ↓
-INVESTIGATE
-   ↓
-Review authentication context
-   ↓
-DOCUMENT
-   ↓
-Evidence report
+Security Event
+      ↓
+Detection Logic
+      ↓
+Correlation
+      ↓
+Alert
+      ↓
+Investigation
+      ↓
+Evidence
+      ↓
+Analyst Assessment
 ```
 
----
+## MITRE ATT&CK Mapping
 
-# 📌 Project Status
+This detection is mapped to the MITRE ATT&CK Enterprise technique:
 
-**Status: Functional SOC Detection Lab**
+### T1110 — Brute Force
 
-Completed:
+**Tactic:** Credential Access
 
-* [x] Event ID 4625 collection
-* [x] XML parsing
-* [x] Historical detection
-* [x] Rolling time-window detection
-* [x] Source IP + account correlation
-* [x] Severity classification
-* [x] Controlled testing
-* [x] Real Windows event testing
-* [x] Real-time monitoring
-* [x] Evidence generation
-* [x] MITRE ATT&CK mapping
-* [x] SOC investigation workflow
+**Technique:** T1110 — Brute Force
 
----
+The detector is designed to identify repeated failed authentication attempts that may be consistent with brute-force activity.
+
+### Why This Mapping Applies
+
+The detection rule looks for:
+
+```text
+Event ID 4625
+      ↓
+Repeated failed logons
+      ↓
+Same Source IP
+      ↓
+Same Target Account
+      ↓
+5+ failures within 5 minutes
+      ↓
+Potential Brute Force Detection
+```
+
+The correlation logic is intended to identify a pattern of repeated authentication failures rather than treating a single failed logon as malicious.
+
+### Detection-to-ATT&CK Relationship
+
+| Detection Component | Project Implementation       |
+| ------------------- | ---------------------------- |
+| ATT&CK Technique    | T1110 — Brute Force          |
+| ATT&CK Tactic       | Credential Access            |
+| Windows Event       | Event ID 4625                |
+| Detection Condition | 5+ failures within 5 minutes |
+| Correlation         | Source IP + Target Account   |
+| Output              | Potential brute-force alert  |
+| Evidence            | Detection report             |
+
+### Important Limitation
+
+The presence of Event ID 4625 does **not** prove that T1110 activity occurred.
+
+A failed authentication can have legitimate causes, such as an incorrect password or an application attempting authentication with invalid credentials.
+
+Therefore, this project treats the ATT&CK mapping as a **detection hypothesis**:
+
+> Repeated authentication failures matching the detection rule may indicate activity consistent with T1110 — Brute Force.
+
+Additional investigation and telemetry are required before determining whether the activity is malicious.
+
+### ATT&CK Reference
+
+MITRE ATT&CK Enterprise Framework:
+
+**T1110 — Brute Force**
+
+https://attack.mitre.org/techniques/T1110/
 
 
 
-Built as a hands-on **Blue Team / SOC learning project** to practice Windows authentication monitoring, detection engineering, and security investigation.
+
+This project was built as a hands-on Blue Team / SOC learning project.
